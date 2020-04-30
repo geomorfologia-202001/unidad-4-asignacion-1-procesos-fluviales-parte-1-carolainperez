@@ -97,16 +97,20 @@ Dentro del bloque de código a continuación, carga el paquete `rgrass7` y crea 
 
 
 ```{r}
+library(rgrass7)
 loc <- initGRASS(gisBase = "/usr/lib/grass78/",
-                 home = '...',
-                 gisDbase = '...',
-                 location = '...',
-                 mapset = '...',
+                 home = 'mi-asignacion',
+                 gisDbase = 'mi-asignacion/mi-grass',
+                 location = 'riobao',
+                 mapset = 'PERMANENT',
                  override = TRUE)
+
 ```
 
 *Describe, en un párrafo, usando tus propias palabras, el procedimiento que acabas de ejecutar. Si aplica, en un párrafo adicional, plantea las ventajas y desventajas de usar GRASS desde R*
+En el bloque de coóigo se carga el paquete rgrass7 con la función library,se ejecuta la ruta para la base de datos, se crea una carpeta de trabajo que contiene el directorio de trabajo de mi repositorio, esta carpeta se llama 'mi-asignacion', y contiene otra subcarpeta llamada 'mi-asignacion/mi-grass', la localizacion es riobao, mi conjunto de mapas está dentro de una carpeta llamada 'PERMANENT' y overwrite es un argumento sirve para sobreescribir cualquier sección abierta y así evitar posibles errores, TODO DEBE SER EJECUTADO.
 
+Las ventajas de grass se puede usar en diferentes sitemas operativos, puede hacer analisis reprodusibles, analisis globales,tienen sus propios algoritmos, se puede utilizar libremente, se puede aportar a su software, es una plataforma académica, muchos libros sobre el uso de grass que ayudan en la geomorfología.
 
 
 ### EJERCICIO 2: Define resolución/extensión utilizando una fuente. Redacta de forma resumida el procedimiento
@@ -126,12 +130,37 @@ Escribe el código necesario para definir la proyección de tu región de GRASS 
 - Verifica la metadata de tu región con la función `gmeta`.
 
 ```{r}
+gmeta()
+dem <- 'mi-asignacion/data-asignada/dembao.tif'
+execGRASS(
+  cmd = 'g.proj',
+  flags = c('t','c'),
+  georef=dem)
+gmeta()
 
+execGRASS(
+  cmd = 'r.in.gdal',
+  flags=c('overwrite','quiet'),
+  parameters=list(
+    input=dem,
+    output='riobao'
+  )
+)
+
+execGRASS(
+  'g.list',
+  flags = 't',
+  parameters = list(
+    type = c('raster', 'vector')
+  )
+)
+gmeta()
 ```
 
 *Describe, en un párrafo, usando tus propias palabras, el procedimiento que acabas de ejecutar*
 
-
+Se verifican los datos ya creados con la sentencia gmeta(), se crea un vector contiene la ruta en el que está almacenado el DEM localizado en la carpeta 'mi-asignacion/data-asignada/dembao.tif', con la extensión execGRASS que tiene 3 argumentos que son cdm que contiene el comando de grass, la función flags que actualiza el DEM, y la georeferencia.
+Al ejecutar de nuevo gmeta(), muestra los datos nuevos. Luego se importa el mapa a Raster con otras funciones de GRASS, en el comando con un r.in.gdal, se utilizan dos funciones de flags, en este caso se usan parametros para ejecutar las definiciones dadas, se pude la funte de entrada y de salida en la base de datos de GRASS.Con otro modulo de execGRASS se introduce un raster para imprimir el mapa.
 
 ### EJERCICIO 3: Explora y compara mapas de GRASS y R. Interpreta el resultado
 
@@ -163,7 +192,7 @@ Explora y compara mapas de pendientes generados en R y en GRASS. Usa el vídeo d
 
 >**Nota sobre la máscara**. Si al ejecutar el addon `g.list` uno de los mapas de denomina `raster/MASK`, como en el ejemplo a continuación, quiere decir que hay una máscara aplicada, con lo que todos los algoritmos se ejecutan únicamente dentro de dicha área.
 
-```{r, eval=F}
+```{r, eval=T}
 execGRASS(
   'g.list',
   flags = 't',
@@ -171,8 +200,7 @@ execGRASS(
     type = c('raster', 'vector')
   )
 )
-raster/MASK
-...
+
 ```
 
 - **En R nuevamente**. Compara los estadísticos descriptivos de los dos mapas de pendiente, es decir, del generado en R y del generado en GRASS, mediante la función `summary`. Genera también un histograma de los valores de pendiente (función `hist`), así como dos mapas de pendiente mediante la función `plot`. Para colocar ambos histogramas o ambos mapas enfrentados, usa `par(mfrow=c(1,2))`, de manera que tu dispositivo gráfico quedará dividido en dos columnas en lo adelante. Si deseas volver a ponerlo en modo 1 columna, ejecuta `par(mfrow=c(1,1))`. Teniendo los histogramas y los mapas enfrentados, podrás interpretar mejor tus resultados.
@@ -180,11 +208,102 @@ raster/MASK
 - **En GRASS desde R**. No olvides volver a poner la región de GRASS a su estado anterior, quitando la máscara (addon `r.mask`) y utilizando la extensión del DEM como límite de la región (addon `g.region`). Puedes comprobar que no hay máscara aplicada si al ejecutar el addon `g.list` NO te aparece el mapa `raster/MASK`.
 
 ```{r}
+execGRASS(
+  'g.list',
+  flags = 't',
+  parameters = list(
+    type = c('raster', 'vector')
+  )
+)
+library(sp)
+use_sp()
+dem_sp <- readRAST('riobao')
+op <- par()
+plot(dem_sp)
 
+library(sf)
+rutariobao <- 'mi-asignacion/data-asignada/cuenca_rio_bao.geojson'
+riobao <- st_read(rutariobao)
+plot(dem_sp)
+plot(riobao, add=T, col='transparent', border='black', lwd=5);par(op[c('mfrow','mar')])
+
+library(raster)
+dem_r0 <- raster(dem_sp)
+dem_r1 <- crop(dem_r0, riobao)
+dem_riobao <- mask(dem_r1, riobao)
+plot(dem_riobao)
+summary(dem_riobao)
+hist(dem_riobao)
+
+pend_riobao <- terrain(x = dem_riobao, opt = 'slope', unit = 'degrees')
+plot(pend_riobao)
+summary(pend_riobao)
+hist(pend_riobao)
+
+writeVECT(as_Spatial(riobao), 'riobao', v.in.ogr_flags='quiet')
+execGRASS(
+  "g.region",
+  parameters=list(
+    vector = "riobao"
+  )
+)
+execGRASS(
+  "r.mask",
+  flags = c('verbose','overwrite','quiet'),
+  parameters = list(
+    vector = 'riobao'
+  )
+)
+execGRASS(
+  cmd = 'r.slope.aspect',
+  flags = c('overwrite','quiet'),
+  parameters = list(
+    elevation='riobao',
+    slope='slope',
+    aspect='aspect',
+    pcurvature='pcurv',
+    tcurvature='tcurv')
+  )
+pend_riobao_g <-raster( readRAST('slope'))
+
+plot(pend_riobao_g);par(op[c('mfrow','mar')])
+summary(pend_riobao_g)
+summary(pend_riobao)
+gmeta()
+execGRASS(
+  "g.region",
+  parameters=list(
+    raster = "riobao"
+  )
+)
+execGRASS(
+  "r.mask",
+  flags = c('r','quiet')
+)
+gmeta()
+
+par(mfrow=c(1,2))
+plot(pend_riobao_g);par(op[c('mfrow','mar')])
+summary(pend_riobao_g)
+summary(pend_riobao)
+gmeta()
+execGRASS(
+  "g.region",
+  parameters=list(
+    raster = "riobao"
+  )
+)
+
+execGRASS(
+  "r.mask",
+  flags = c('r','quiet')
+)
+gmeta()
+par(mfrow=c(1,2))
 ```
 
 *Tu párrafo interpretativo debajo de esta línea. Algunas preguntas clave: ¿Hay diferencias? ¿Son significativas? ¿Notas diferencias entre ambos mapas de pendiente en algunas áreas más que en otras?*
-
+sí hay diferencias pero no muy significativas.El mapa de pendiente generado en Grass los valores son menos que los generados en Rstudios. En el primer cuartil se puede distinguir que en el mapa de Grass la pendiente es de 15.94 grados, mientras que en el caso de Rstudios la pendiente es de 16.25 grados.
 
 
 ### EJERCICIO 4: Extrae el límite de tu cuenca hidrográfica. Descríbelo
@@ -217,13 +336,92 @@ raster/MASK
 - Haz también un mapa de tu cuenca con la función `mapview` del paquete homónimo.
 
 
-```{r}
-
+```{r, include=TRUE}
+source(
+  knitr::purl(
+    'proyeccion-importar-fuente-extension.Rmd',
+    output=tempfile()
+  )
+)
+knitr::opts_chunk$set(fig.path = "img/calcwshed/")
 ```
 
-*Describe, en términos morfométricos, el límite de tu cuenca y abunda sobre ella. Algunas preguntas guía: ¿Qué forma tiene? ¿A qué atribuyes su forma? ¿Es importante esta cuenca? ¿Por qué?*
+## Imprimir lista de mapas ráster y vectoriales dentro en la región/localización activa
 
+* Nótese que el paquete `rgrass7` no se carga en esta sesión porque el bloque anterior ya lo hace al ejecutar el código contenido en el archivo `proyeccion-importar-fuente-extension.Rmd`
 
+```{r}
+execGRASS(
+  'g.list',
+  flags = 't',
+  parameters = list(
+    type = c('raster', 'vector')
+  )
+)
+```
+
+## Calcular parámetros hidrográficos de interés usando `r.watershed`
+
+```{r}
+execGRASS(
+  "r.watershed",
+  flags = c('overwrite','quiet'),
+  parameters = list(
+    elevation = "riobao",
+    accumulation = "accum-de-rwshed",
+    stream = "stream-de-rwshed",
+    drainage = "drainage-dir-de-rwshed",
+    basin = 'basins',
+    half_basin = 'half-basins',
+    threshold = 80
+  )
+)
+```
+
+## Traer capas a R
+
+```{r, results='hide'}
+#Usar Spatial*
+library(sp)
+use_sp()
+#Paquete manejo de los raster
+library(raster)
+#DEM
+dem <- raster(readRAST('riobao'))
+#Basins
+basins <- raster(readRAST('basins'))
+#Stream network
+stream <- raster(readRAST('stream-de-rwshed'))
+stream3857 <- projectRaster(stream, crs = CRS("+init=epsg:3857"), method = 'ngb')
+#Generar un vectorial de extensión de capa en EPSG:4326
+e <- extent(stream)
+e <- as(e, 'SpatialPolygons')
+proj4string(e) <- CRS("+init=epsg:32619")
+e <- spTransform(e, CRSobj = CRS("+init=epsg:4326"))
+```
+
+## Visualizar capas con `leaflet`
+
+```{r}
+library(leaflet)
+library(leafem)
+leaflet() %>%
+  addProviderTiles(providers$Stamen.Terrain, group = 'terrain') %>%
+  addRasterImage(dem, group='DEM', opacity = 0.5) %>%
+  addRasterImage(
+    ratify(basins),
+    group='basins', opacity = 0.7,
+    colors = sample(rep(RColorBrewer::brewer.pal(12, 'Set3'),1000))) %>% 
+  addRasterImage(stream3857, project = F, group='str', opacity = 0.7, method = 'ngb', colors = 'blue') %>% 
+  addLayersControl(
+    overlayGroups = c('terrain','DEM','basins','str'),
+    options = layersControlOptions(collapsed=FALSE)) %>% 
+  addHomeButton(extent(e), 'Ver todo')
+```
+
+*Describe, en términos morfométricos, el límite de tu cuenca y abunda sobre ella. Algunas preguntas guía: ¿Qué forma tiene? ¿A qué atribuyes su forrñma? ¿Es importante esta cuenca? ¿Por qué?*
+
+La cuenca del rio bao en la localidad de Constanza tiene forma como de un heptagono parecido al país serbia, su forma se le puede atribuir a la topografia del terreno.
 
 ### EJERCICIO 5: Extrae la red de drenaje de tu cuenca utilizando dos umbrales de acumulación distintos. Describe e interpreta los resultados.
 
@@ -247,7 +445,105 @@ Usando el addon de GRASS `r.stream.extract`, realiza las siguientes tareas:
     - Ejecuta `leaflet`, añade `Stamen.Terrain` como proveedor de fondo, añade (usando la pipa `%>%`) cada red transformada con `addPolylines` (ver vídeo y script de referencia) y finalmente añade un botón que te permita activar y desactivar cada red. En este mapa podrás hacer zoom en distintas áreas y tendrás más control del mapa.
 
 ```{r}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  collapse=TRUE,
+  eval = T
+)
 
+source(
+  knitr::purl(
+    'crear-una-cuenca-con-r-water-outlet.Rmd',
+    output=tempfile()
+  )
+)
+knitr::opts_chunk$set(fig.path = "img/extractnet/")
+
+execGRASS(
+  'g.list',
+  flags = 't',
+  parameters = list(
+    type = c('raster', 'vector')
+  )
+)
+execGRASS(
+  "r.mask",
+  flags = c('verbose','overwrite','quiet'),
+  parameters = list(
+    vector = 'riobao_basin'
+  )
+)
+
+execGRASS(
+  "r.stream.extract",
+  flags = c('overwrite','quiet'),
+  parameters = list(
+    elevation = 'riobao',
+    threshold = 30,
+    stream_raster = 'red30',
+    stream_vector = 'red30'
+  )
+)
+par(mfrow=c(1,1))
+par(mfrow=c(1,2))
+execGRASS(
+  "r.stream.extract",
+  flags = c('overwrite','quiet'),
+  parameters = list(
+    elevation = 'riobao',
+    threshold = 80,
+    stream_raster = 'red80',
+    stream_vector = 'red80'
+  )
+)
+  
+ execGRASS(
+  'g.list',
+  flags = 't',
+  parameters = list(
+    type = c('raster', 'vector')
+  )
+)
+ loc
+ 
+ red30 <- readVECT('red30')
+ red80 <- readVECT('red80')
+ 
+ par(mfrow=c(1,1))
+ 
+ plot(red80)
+ plot(red30)
+ plot(red80); par(mfrow=c(1,2))
+ plot(red80)
+ plot(red30)
+
+red8011 <- spTransform(red80, CRSobj = CRS("+init=epsg:4326"))
+red8011
+red38011 <- spTransform(red80, CRSobj = CRS("+init=epsg:4326"))
+red38011
+
+library(leaflet)
+leaflet() %>% 
+  addPolylines(data = red8011, weight = 3, opacity = 0.7, group = 'str_vect') %>% 
+  leafem::addHomeButton(extent(riobao_net4326), 'Ver todo') %>% 
+  addLayersControl(
+    overlayGroups = c('terrain','str_vect','str_raster'),
+    options = layersControlOptions(collapsed=FALSE)) 
+
+leaflet() %>% 
+  addPolylines(data = red3011, weight = 3, opacity = 0.7, group = 'str_vect') %>% 
+  leafem::addHomeButton(extent(pant_net4326), 'Ver todo') %>% 
+  addLayersControl(
+    overlayGroups = c('terrain','str_vect','str_raster'),
+    options = layersControlOptions(collapsed=FALSE)) 
+  setView(lng = pant_centroid[1], lat = pant_centroid[2], zoom = 11) %>%
+  addProviderTiles(providers$Stamen.Terrain, group = 'terrain') %>%
+  addRasterImage(pant_net_r3857, opacity = 0.7, method = 'ngb', colors = 'grey20', group = 'str_raster') %>% 
+  
+  red30 <- readVECT('red30')
+  red30ll <- spTransform(red30, CRSobj = CRS("+init=epsg:4326"))
+  library(leaflet)
+  
 ```
 
 *Describe tus dos redes de drenaje e interprétalas. Algunas preguntas guía: En dos líneas, ¿cómo describirías tus dos redes? ¿Cuál es/son la/s diferencia/s principales entre ambas redes, es decir, entre la generada con umbral 30 y la generada con 80? Clasifica tu tipo de red según morfología, apoyándote en el material de apoyo de la clase (e.g. dendrítica, paralela, etc.) [@gutierrez2008geomorfologia;@pedraza1996geomorfologia].*
