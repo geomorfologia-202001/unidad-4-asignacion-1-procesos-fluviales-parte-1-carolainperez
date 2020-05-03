@@ -1,5 +1,5 @@
 ---
-output: github_document
+output: html_document
 bibliography: biblio.bib
 csl: apa.csl
 editor_options: 
@@ -12,7 +12,7 @@ knitr::opts_chunk$set(
   collapse=TRUE,
   out.width='100%',
   fig.path = "misfiguras/",
-  eval = F
+  eval = T
 )
 ```
 
@@ -200,7 +200,6 @@ execGRASS(
     type = c('raster', 'vector')
   )
 )
-
 ```
 
 - **En R nuevamente**. Compara los estadísticos descriptivos de los dos mapas de pendiente, es decir, del generado en R y del generado en GRASS, mediante la función `summary`. Genera también un histograma de los valores de pendiente (función `hist`), así como dos mapas de pendiente mediante la función `plot`. Para colocar ambos histogramas o ambos mapas enfrentados, usa `par(mfrow=c(1,2))`, de manera que tu dispositivo gráfico quedará dividido en dos columnas en lo adelante. Si deseas volver a ponerlo en modo 1 columna, ejecuta `par(mfrow=c(1,1))`. Teniendo los histogramas y los mapas enfrentados, podrás interpretar mejor tus resultados.
@@ -276,6 +275,7 @@ execGRASS(
     raster = "riobao"
   )
 )
+
 execGRASS(
   "r.mask",
   flags = c('r','quiet')
@@ -294,12 +294,8 @@ execGRASS(
   )
 )
 
-execGRASS(
-  "r.mask",
-  flags = c('r','quiet')
-)
 gmeta()
-par(mfrow=c(1,2))
+par(mfrow=c(1,1))
 ```
 
 *Tu párrafo interpretativo debajo de esta línea. Algunas preguntas clave: ¿Hay diferencias? ¿Son significativas? ¿Notas diferencias entre ambos mapas de pendiente en algunas áreas más que en otras?*
@@ -336,15 +332,7 @@ sí hay diferencias pero no muy significativas.El mapa de pendiente generado en 
 - Haz también un mapa de tu cuenca con la función `mapview` del paquete homónimo.
 
 
-```{r, include=TRUE}
-source(
-  knitr::purl(
-    'proyeccion-importar-fuente-extension.Rmd',
-    output=tempfile()
-  )
-)
-knitr::opts_chunk$set(fig.path = "img/calcwshed/")
-```
+
 
 ## Imprimir lista de mapas ráster y vectoriales dentro en la región/localización activa
 
@@ -417,11 +405,66 @@ leaflet() %>%
     overlayGroups = c('terrain','DEM','basins','str'),
     options = layersControlOptions(collapsed=FALSE)) %>% 
   addHomeButton(extent(e), 'Ver todo')
+
+riobao_out <-c( 292900,2124790)
+
+execGRASS(
+  "r.water.outlet",
+  flags = c('overwrite','quiet'),
+  parameters = list(
+    input = 'drainage-dir-de-rwshed',
+    output = 'riobao-basin',
+    coordinates = riobao_out
+  )
+)
+
+execGRASS(
+  "r.to.vect",
+  flags = c('overwrite','quiet'),
+  parameters = list(
+    input = 'riobao-basin',
+    output = 'riobao_basin',
+    type = 'area'
+  )
+)
+
+execGRASS(
+  "g.region",
+  parameters=list(
+    vector = "riobao_basin"
+  )
+)
+execGRASS(
+  "r.mask",
+  flags = c('verbose','overwrite','quiet'),
+  parameters = list(
+    vector = 'riobao_basin'
+  )
+)
+
+execGRASS(
+  'g.list',
+  flags = 't',
+  parameters = list(
+    type = c('raster', 'vector')
+  )
+)
+
+plot(dem)
+bao <-readVECT("riobao_basin")
+plot(bao, add=T)
+
+library(mapview)
+mapview(
+  bao, method='ngb', col.regions = 'blue',
+  legend = T, label = FALSE, maxpixels =  910425
+)
+
 ```
 
-*Describe, en términos morfométricos, el límite de tu cuenca y abunda sobre ella. Algunas preguntas guía: ¿Qué forma tiene? ¿A qué atribuyes su forrñma? ¿Es importante esta cuenca? ¿Por qué?*
+*Describe, en términos morfométricos, el límite de tu cuenca y abunda sobre ella. Algunas preguntas guía: ¿Qué forma tiene? ¿A qué atribuyes su forma? ¿Es importante esta cuenca? ¿Por qué?*
 
-La cuenca del rio bao en la localidad de Constanza tiene forma como de un heptagono parecido al país serbia, su forma se le puede atribuir a la topografia del terreno.
+La cuenca del rio bao en la localidad de Santiago,casi en su totalidad la pendiente es muy elevada con más de 1,500 metros de altura, con pocas zonas bajas, su morfología se le puede atribuir a la topografia del terreno, el rio bao nace en la zona más alta de la cuenca y desemboca en una zona más baja.
 
 ### EJERCICIO 5: Extrae la red de drenaje de tu cuenca utilizando dos umbrales de acumulación distintos. Describe e interpreta los resultados.
 
@@ -445,34 +488,28 @@ Usando el addon de GRASS `r.stream.extract`, realiza las siguientes tareas:
     - Ejecuta `leaflet`, añade `Stamen.Terrain` como proveedor de fondo, añade (usando la pipa `%>%`) cada red transformada con `addPolylines` (ver vídeo y script de referencia) y finalmente añade un botón que te permita activar y desactivar cada red. En este mapa podrás hacer zoom en distintas áreas y tendrás más control del mapa.
 
 ```{r}
-knitr::opts_chunk$set(
-  echo = TRUE,
-  collapse=TRUE,
-  eval = T
+execGRASS(
+  "r.stream.extract",
+  flags = c('overwrite','quiet'),
+  parameters = list(
+    elevation = 'riobao',
+    threshold = 80,
+    stream_raster = 'riobao-stream-de-rstr',
+    stream_vector = 'riobao_stream_de_rstr'
+  )
 )
 
-source(
-  knitr::purl(
-    'crear-una-cuenca-con-r-water-outlet.Rmd',
-    output=tempfile()
+execGRASS(
+  "r.stream.extract",
+  flags = c('overwrite','quiet'),
+  parameters = list(
+    elevation = 'riobao',
+    threshold = 30,
+    stream_raster = 'riobao-stream-de-rstr',
+    stream_vector = 'riobao_stream_de_rstr'
   )
 )
-knitr::opts_chunk$set(fig.path = "img/extractnet/")
 
-execGRASS(
-  'g.list',
-  flags = 't',
-  parameters = list(
-    type = c('raster', 'vector')
-  )
-)
-execGRASS(
-  "r.mask",
-  flags = c('verbose','overwrite','quiet'),
-  parameters = list(
-    vector = 'riobao_basin'
-  )
-)
 
 execGRASS(
   "r.stream.extract",
@@ -484,8 +521,7 @@ execGRASS(
     stream_vector = 'red30'
   )
 )
-par(mfrow=c(1,1))
-par(mfrow=c(1,2))
+
 execGRASS(
   "r.stream.extract",
   flags = c('overwrite','quiet'),
@@ -496,7 +532,29 @@ execGRASS(
     stream_vector = 'red80'
   )
 )
-  
+
+execGRASS(
+  'g.list',
+  flags = 't',
+  parameters = list(
+    type = c('raster', 'vector')
+  )
+)
+red30 <- readVECT('red30')
+red80 <- readVECT('red80')
+ 
+ par(mfrow=c(1,2))
+ 
+ plot(red80)
+ plot(red30)
+ plot(red80);
+ plot(red80)
+ plot(red30)
+red80ll <- spTransform(red80, CRSobj = CRS("+init=epsg:4326"))
+red80ll
+red30ll <- spTransform(red30, CRSobj = CRS("+init=epsg:4326"))
+red30ll
+
  execGRASS(
   'g.list',
   flags = 't',
@@ -504,49 +562,28 @@ execGRASS(
     type = c('raster', 'vector')
   )
 )
- loc
- 
- red30 <- readVECT('red30')
- red80 <- readVECT('red80')
- 
- par(mfrow=c(1,1))
- 
- plot(red80)
- plot(red30)
- plot(red80); par(mfrow=c(1,2))
- plot(red80)
- plot(red30)
-
-red8011 <- spTransform(red80, CRSobj = CRS("+init=epsg:4326"))
-red8011
-red38011 <- spTransform(red80, CRSobj = CRS("+init=epsg:4326"))
-red38011
+par(mfrow=c(1,2)) 
 
 library(leaflet)
 leaflet() %>% 
-  addPolylines(data = red8011, weight = 3, opacity = 0.7, group = 'str_vect') %>% 
-  leafem::addHomeButton(extent(riobao_net4326), 'Ver todo') %>% 
+  addPolylines(data = red80ll, weight = 3, opacity = 0.7, group = 'str_vect') %>% 
+  leafem::addHomeButton(extent(red80ll), 'Ver todo') %>% 
   addLayersControl(
     overlayGroups = c('terrain','str_vect','str_raster'),
     options = layersControlOptions(collapsed=FALSE)) 
 
+library(leaflet)
 leaflet() %>% 
-  addPolylines(data = red3011, weight = 3, opacity = 0.7, group = 'str_vect') %>% 
-  leafem::addHomeButton(extent(pant_net4326), 'Ver todo') %>% 
+  addPolylines(data = red30ll, weight = 3, opacity = 0.7, group = 'str_vect') %>% 
+  leafem::addHomeButton(extent(red30ll), 'Ver todo') %>% 
   addLayersControl(
     overlayGroups = c('terrain','str_vect','str_raster'),
     options = layersControlOptions(collapsed=FALSE)) 
-  setView(lng = pant_centroid[1], lat = pant_centroid[2], zoom = 11) %>%
-  addProviderTiles(providers$Stamen.Terrain, group = 'terrain') %>%
-  addRasterImage(pant_net_r3857, opacity = 0.7, method = 'ngb', colors = 'grey20', group = 'str_raster') %>% 
-  
-  red30 <- readVECT('red30')
-  red30ll <- spTransform(red30, CRSobj = CRS("+init=epsg:4326"))
-  library(leaflet)
+
   
 ```
 
 *Describe tus dos redes de drenaje e interprétalas. Algunas preguntas guía: En dos líneas, ¿cómo describirías tus dos redes? ¿Cuál es/son la/s diferencia/s principales entre ambas redes, es decir, entre la generada con umbral 30 y la generada con 80? Clasifica tu tipo de red según morfología, apoyándote en el material de apoyo de la clase (e.g. dendrítica, paralela, etc.) [@gutierrez2008geomorfologia;@pedraza1996geomorfologia].*
 
-
+La que tiene un umbral 30 se trata de una red de drenaje dretrítica por la cantidad de ramificaciones y la del umbral 80 esta tiene menos ramificaciones por lo que que le considera una red rectangular.
 # Referencias
